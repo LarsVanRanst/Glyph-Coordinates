@@ -35,10 +35,10 @@ hidden.ttf  ->  look at the dots  ->  0s and 1s  ->  file (same as before!)
 ## Use the demo (the easy way)
 
 1. Open https://larsvanranst.github.io/Glyph-Coordinates/ and wait until the top says **Ready.** (the first time takes a few seconds).
-2. In box **1. Hide a file**, click and choose a file. It has to be smaller than about 220 KB.
+2. In box **1. Hide a file**, click and choose a file.
 3. Click **Hide it in the font**.
-4. Click **Download hidden.ttf**. This font has your file inside!
-5. In box **2. Get it back**, choose `hidden.ttf`.
+4. Click the download button. The font has your file inside! (A big file does not fit in one font, so you get several fonts in one `.zip`. See "Big files" below.)
+5. In box **2. Get it back**, choose the font (or all the fonts, or the `.zip`).
 6. Click the download button. You have your file again.
 
 Want to check that it is really the same file? Look at the **SHA-256** line (see "Is it really identical?" below).
@@ -64,7 +64,7 @@ pip install fonttools
 (On Windows you can write `py -m pip install fonttools`.)
 
 ### 4. Use it
-Windows users write `py` instead of `python` if it isn't working
+Windows users write `py` instead of `python` if it doesn't work.
 
 See how much fits in a font:
 ```
@@ -81,6 +81,11 @@ Get it back:
 python Weirdfont.py decode hidden.ttf -d recovered
 ```
 Your file is now in the folder `recovered`.
+
+If your file was big and you got several fonts (`hidden_001of003.ttf`, …), give `decode` all of them. A pattern or a folder works too:
+```
+python Weirdfont.py decode "hidden_*.ttf" -d recovered
+```
 
 ---
 
@@ -119,15 +124,31 @@ Same. 🎉
 
 More letters and more dots in a font means more room. Files are compressed first (zlib) when that makes them smaller, so text fits better than photos.
 
-**Biggest file I stored:** 200,000 bytes (a random file) in `IPAGothic.ttf`, and it came back with the same SHA-256.
+**Biggest file I stored:** 600,000 bytes (a random file) spread over 3 copies of `IPAGothic.ttf`, and it came back with the same SHA-256 (`6d873b9d00b4b7629ffc41fa657248c6e8328c9861b882a7307fb8652a4305f1`).
 
-If your file is too big, you get a message and nothing breaks. You can use your own TrueType font in the demo ("Use my own .ttf"), or on the command line, to get more room.
+You can also use your own TrueType font in the demo ("Use my own .ttf"), or on the command line, to get more room per font.
+
+## Big files: the pile of fonts
+
+One font is full? No problem. The file is cut into pieces, like a sandwich cut into slices. Each slice goes into its **own copy of the font**. Every font gets a little label saying "I am slice 2 of 3", so you can give them back in **any order**. Missing a slice, or mixing slices from two different files? You get a clear error.
+
+The price: every slice is a whole font. With `IPAGothic.ttf` (6 MB) a 1 MB file needs 5 fonts, so about 30 MB. Big files are slow in the browser, use the command line for those.
 
 ---
 
 ## What is written inside (the header)
 
-Before your file we write a small label, so we know what to read back:
+Every font starts with a **chunk label** (44 bytes):
+
+| Part | Size | What it is |
+|---|---|---|
+| `WFCK` | 4 bytes | "this is a slice of ours" |
+| index | 2 bytes | which slice this is (starting at 0) |
+| total | 2 bytes | how many slices there are |
+| slice length | 4 bytes | how many bytes of data follow |
+| group id | 32 bytes | SHA-256 of the whole payload, so slices of different files can't be mixed |
+
+After the slices are put back together, the payload starts with a **file label**, so we know what to read back:
 
 | Part | Size | What it is |
 |---|---|---|
@@ -149,6 +170,7 @@ When decoding, the fingerprint is checked. If it does not match, you get an erro
 
 - It needs a **TrueType font** (`.ttf`). Fonts that end in `.otf` (CFF) and "variable" fonts do not work.
 - The font must stay **as it is**. If you open it in a font editor and save it again, or convert it, the dots can change and the secret is lost.
+- Slices from different files can't be mixed (the group id checks this).
 - No error correction yet. The fingerprint tells you if something went wrong, but it can't fix it.
 - Everything happens on your own computer. The website runs the same Python file in your browser (with [Pyodide](https://pyodide.org)), and your file is never uploaded.
 
