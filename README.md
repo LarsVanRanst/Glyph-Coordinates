@@ -8,7 +8,7 @@ The font still works like a normal font. You can install it and type with it. No
 
 ---
 
-## The idea, like you are five
+## The idea
 
 A letter in a font, like "A", is drawn with dots. Each dot has two numbers: how far it is from the left (x) and how far it is from the bottom (y).
 
@@ -64,7 +64,7 @@ pip install fonttools
 (On Windows you can write `py -m pip install fonttools`.)
 
 ### 4. Use it
-Windows users write `py` instead of `python`.
+Windows users write `py` instead of `python` if it isn't working
 
 See how much fits in a font:
 ```
