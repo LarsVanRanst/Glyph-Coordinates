@@ -20,7 +20,7 @@ pre{white-space:pre-wrap;word-break:break-all;font:13px/1.5 ui-monospace,Menlo,C
 #st{margin-bottom:16px;padding:10px 14px;border-radius:8px;border:1px solid var(--bd);background:var(--card)}
 </style></head><body><main>
 <h1>Weirdfont</h1>
-<p class="s">Hide any file inside a working TrueType font. This page runs the real <a href="Weirdfont.py">weirdfont.py</a> in your browser with Pyodide, nothing is uploaded.</p>
+<p class="s">Hide any file inside a working TrueType font. A big file is split over several fonts. This page runs the real <a href="Weirdfont.py">weirdfont.py</a> in your browser with Pyodide, nothing is uploaded.</p>
 <div id="st">Loading Python…</div>
 <div class="g">
 <section class="c"><h2>1. Hide a file</h2>
@@ -30,7 +30,7 @@ pre{white-space:pre-wrap;word-break:break-all;font:13px/1.5 ui-monospace,Menlo,C
 <button id="go" disabled>Hide it in the font</button>
 <div id="o1"></div></section>
 <section class="c"><h2>2. Get it back</h2>
-<label class="d">Choose a hidden .ttf<input type="file" id="f2" accept=".ttf"></label>
+<label class="d">Choose the hidden .ttf font(s), or the .zip<input type="file" id="f2" accept=".ttf,.zip" multiple></label>
 <div id="o2"></div></section>
 </div></main>
 <script src="https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js"></script>
@@ -38,7 +38,7 @@ pre{white-space:pre-wrap;word-break:break-all;font:13px/1.5 ui-monospace,Menlo,C
 const $ = i => document.getElementById(i);
 let py, file = null, fontBytes = null;
 const WRAP = `
-import io, os, shutil, json
+import io, os, shutil, json, zipfile
 from contextlib import redirect_stdout
 import weirdfont
 def _run(fn, *a):
@@ -52,11 +52,25 @@ def _run(fn, *a):
     except Exception as e:
         return json.dumps({"ok": False, "out": str(e)})
 def do_encode(src):
-    if os.path.exists("hidden.ttf"): os.remove("hidden.ttf")
-    return _run(weirdfont.encode, src, "font.ttf", "hidden.ttf")
+    shutil.rmtree("out", ignore_errors=True)
+    os.makedirs("out")
+    r = json.loads(_run(weirdfont.encode, src, "font.ttf", "out/hidden.ttf"))
+    r["files"] = sorted(os.listdir("out")) if r["ok"] else []
+    if len(r["files"]) > 1:
+        with zipfile.ZipFile("out/hidden_fonts.zip", "w", zipfile.ZIP_DEFLATED) as z:
+            for f in r["files"]:
+                z.write("out/" + f, f)
+    return json.dumps(r)
+def reset_in():
+    shutil.rmtree("in", ignore_errors=True)
+    os.makedirs("in")
 def do_decode():
     shutil.rmtree("rec", ignore_errors=True)
-    r = json.loads(_run(weirdfont.decode, "in.ttf", "rec"))
+    for f in os.listdir("in"):
+        if f.lower().endswith(".zip"):
+            zipfile.ZipFile("in/" + f).extractall("in")
+    fonts = sorted(os.path.join(d, f) for d, _, fs in os.walk("in") for f in fs if f.lower().endswith(".ttf"))
+    r = json.loads(_run(weirdfont.decode, fonts, "rec"))
     r["files"] = os.listdir("rec") if os.path.isdir("rec") else []
     return json.dumps(r)
 `;
@@ -82,11 +96,20 @@ $('go').onclick = async () => {
   py.FS.writeFile(file.name, new Uint8Array(await file.arrayBuffer()));
   const r = JSON.parse(py.runPython(`do_encode(${JSON.stringify(file.name)})`));
   show(o, r.out, r.ok ? 'ok' : 'er');
-  if (r.ok) o.append(dl(py.FS.readFile('hidden.ttf'), 'hidden.ttf'));
+  if (!r.ok) return;
+  const rd = n => py.FS.readFile('out/' + n);
+  if (r.files.length === 1) o.append(dl(rd(r.files[0]), r.files[0]));
+  else {
+    o.append(dl(rd('hidden_fonts.zip'), 'hidden_fonts.zip'));
+    const det = document.createElement('details'); det.innerHTML = '<summary>Or download the fonts one by one</summary>';
+    r.files.forEach(n => { det.append(dl(rd(n), n)); det.append(' '); }); o.append(det);
+  }
 };
 $('f2').onchange = async () => {
-  const f = $('f2').files[0], o = $('o2'); if (!f || !py) return;
-  py.FS.writeFile('in.ttf', new Uint8Array(await f.arrayBuffer()));
+  const fs = [...$('f2').files], o = $('o2'); if (!fs.length || !py) return;
+  show(o, 'Working…');
+  py.runPython('reset_in()');
+  for (const f of fs) py.FS.writeFile('in/' + f.name, new Uint8Array(await f.arrayBuffer()));
   const r = JSON.parse(py.runPython('do_decode()'));
   show(o, r.out, r.ok ? 'ok' : 'er');
   if (r.ok && r.files.length) o.append(dl(py.FS.readFile('rec/' + r.files[0]), r.files[0]));
