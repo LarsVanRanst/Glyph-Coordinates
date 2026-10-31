@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weirdfont: hide files in a font</title>
+<style>
+:root{--bg:#f7f6f2;--card:#fff;--fg:#1d1d1b;--mut:#6b6a66;--ac:#2f5fd0;--ok:#1b7f4b;--err:#b3261e;--bd:#dedcd5}
+@media(prefers-color-scheme:dark){:root{--bg:#161615;--card:#1f1f1d;--fg:#ecebe6;--mut:#a09f99;--ac:#8ab0ff;--ok:#6fd49b;--err:#ff8a80;--bd:#34332f;color-scheme:dark}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:860px;margin:0 auto;padding:24px 16px 48px}
+h1{margin:0 0 4px}h2{margin:0 0 8px;font-size:1.15rem}.s{color:var(--mut);margin:0 0 20px}
+.g{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px}
+label.d{display:block;border:2px dashed var(--bd);border-radius:10px;padding:16px;text-align:center;cursor:pointer;color:var(--mut)}
+label.d:hover{border-color:var(--ac);color:var(--fg)}
+input[type=file]{display:none}
+button,a.b{display:inline-block;margin-top:12px;padding:9px 16px;border:0;border-radius:8px;background:var(--ac);color:#fff;font:inherit;cursor:pointer;text-decoration:none}
+button:disabled{opacity:.45;cursor:default}
+pre{white-space:pre-wrap;word-break:break-all;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--mut);margin:10px 0 0}
+.ok{color:var(--ok)}.er{color:var(--err)}
+#st{margin-bottom:16px;padding:10px 14px;border-radius:8px;border:1px solid var(--bd);background:var(--card)}
+</style></head><body><main>
+<h1>Weirdfont</h1>
+<p class="s">Hide any file inside a working TrueType font. This page runs the real <a href="Weirdfont.py">weirdfont.py</a> in your browser with Pyodide, nothing is uploaded.</p>
+<div id="st">Loading Python…</div>
+<div class="g">
+<section class="c"><h2>1. Hide a file</h2>
+<label class="d">Choose any file<input type="file" id="f1"></label>
+<pre id="i1">No file chosen.</pre>
+<p><small>Carrier font: <b id="fn">DejaVuSans.ttf</b>. <label style="text-decoration:underline;cursor:pointer">Use my own .ttf<input type="file" id="ff" accept=".ttf"></label></small></p>
+<button id="go" disabled>Hide it in the font</button>
+<div id="o1"></div></section>
+<section class="c"><h2>2. Get it back</h2>
+<label class="d">Choose a hidden .ttf<input type="file" id="f2" accept=".ttf"></label>
+<div id="o2"></div></section>
+</div></main>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js"></script>
+<script>
+const $ = i => document.getElementById(i);
+let py, file = null, fontBytes = null;
+const WRAP = `
+import io, os, shutil, json
+from contextlib import redirect_stdout
+import weirdfont
+def _run(fn, *a):
+    buf = io.StringIO()
+    try:
+        with redirect_stdout(buf):
+            fn(*a)
+        return json.dumps({"ok": True, "out": buf.getvalue()})
+    except SystemExit as e:
+        return json.dumps({"ok": False, "out": str(e)})
+    except Exception as e:
+        return json.dumps({"ok": False, "out": str(e)})
+def do_encode(src):
+    if os.path.exists("hidden.ttf"): os.remove("hidden.ttf")
+    return _run(weirdfont.encode, src, "font.ttf", "hidden.ttf")
+def do_decode():
+    shutil.rmtree("rec", ignore_errors=True)
+    r = json.loads(_run(weirdfont.decode, "in.ttf", "rec"))
+    r["files"] = os.listdir("rec") if os.path.isdir("rec") else []
+    return json.dumps(r)
+`;
+const show = (el, text, cls) => { el.innerHTML = ''; const p = document.createElement('pre'); p.className = cls || ''; p.textContent = text; el.append(p); };
+const dl = (bytes, name) => { const a = document.createElement('a'); a.className = 'b'; a.download = name; a.textContent = 'Download ' + name; a.href = URL.createObjectURL(new Blob([bytes])); return a; };
+(async () => {
+  try {
+    py = await loadPyodide();
+    await py.loadPackage('micropip');
+    await py.runPythonAsync("import micropip\nawait micropip.install('fonttools')");
+    py.FS.writeFile('weirdfont.py', await (await fetch('Weirdfont.py')).text());
+    fontBytes = new Uint8Array(await (await fetch('DejaVuSans.ttf')).arrayBuffer());
+    await py.runPythonAsync(WRAP);
+    $('st').textContent = 'Ready.'; $('st').className = 'ok';
+    $('go').disabled = !file;
+  } catch (e) { $('st').textContent = 'Could not start Python: ' + e.message; $('st').className = 'er'; }
+})();
+$('f1').onchange = () => { file = $('f1').files[0]; if (!file) return; $('i1').textContent = `${file.name} (${file.size} bytes)`; $('go').disabled = !py || !fontBytes; $('o1').innerHTML = ''; };
+$('ff').onchange = async () => { const f = $('ff').files[0]; if (f) { fontBytes = new Uint8Array(await f.arrayBuffer()); $('fn').textContent = f.name; } };
+$('go').onclick = async () => {
+  const o = $('o1'); show(o, 'Working…');
+  py.FS.writeFile('font.ttf', fontBytes);
+  py.FS.writeFile(file.name, new Uint8Array(await file.arrayBuffer()));
+  const r = JSON.parse(py.runPython(`do_encode(${JSON.stringify(file.name)})`));
+  show(o, r.out, r.ok ? 'ok' : 'er');
+  if (r.ok) o.append(dl(py.FS.readFile('hidden.ttf'), 'hidden.ttf'));
+};
+$('f2').onchange = async () => {
+  const f = $('f2').files[0], o = $('o2'); if (!f || !py) return;
+  py.FS.writeFile('in.ttf', new Uint8Array(await f.arrayBuffer()));
+  const r = JSON.parse(py.runPython('do_decode()'));
+  show(o, r.out, r.ok ? 'ok' : 'er');
+  if (r.ok && r.files.length) o.append(dl(py.FS.readFile('rec/' + r.files[0]), r.files[0]));
+};
+</script></body></html>
