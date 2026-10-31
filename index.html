@@ -26,7 +26,7 @@ pre{white-space:pre-wrap;word-break:break-all;font:13px/1.5 ui-monospace,Menlo,C
 <section class="c"><h2>1. Hide a file</h2>
 <label class="d">Choose any file<input type="file" id="f1"></label>
 <pre id="i1">No file chosen.</pre>
-<p><small>Carrier font: <b id="fn">DejaVuSans.ttf</b>. <label style="text-decoration:underline;cursor:pointer">Use my own .ttf<input type="file" id="ff" accept=".ttf"></label></small></p>
+<p><small>Carrier font: <b id="fn">IPAGothic.ttf</b>. <label style="text-decoration:underline;cursor:pointer">Use my own .ttf<input type="file" id="ff" accept=".ttf"></label></small></p>
 <button id="go" disabled>Hide it in the font</button>
 <div id="o1"></div></section>
 <section class="c"><h2>2. Get it back</h2>
@@ -68,7 +68,7 @@ const dl = (bytes, name) => { const a = document.createElement('a'); a.className
     await py.loadPackage('micropip');
     await py.runPythonAsync("import micropip\nawait micropip.install('fonttools')");
     py.FS.writeFile('weirdfont.py', await (await fetch('Weirdfont.py')).text());
-    fontBytes = new Uint8Array(await (await fetch('DejaVuSans.ttf')).arrayBuffer());
+    fontBytes = new Uint8Array(await (await fetch('IPAGothic.ttf')).arrayBuffer());
     await py.runPythonAsync(WRAP);
     $('st').textContent = 'Ready.'; $('st').className = 'ok';
     $('go').disabled = !file;
